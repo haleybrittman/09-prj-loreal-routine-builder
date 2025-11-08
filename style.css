@@ -34,6 +34,13 @@ body {
   font-size: 22px;
   font-weight: 500;
   margin-bottom: 10px;
+  /* Gradient text using L'Oréal gold (#E3A535) to black (#000000) */
+  background: linear-gradient(90deg, #E3A535 0%, #000000 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  /* Optional subtle emphasis */
+  letter-spacing: 0.2px;
 }
 
 /* category filter */
