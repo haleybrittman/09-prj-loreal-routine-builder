@@ -186,6 +186,17 @@ body {
   display: flex;
   gap: 15px;
   min-height: 160px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-2px);
+}
+
+.product-card.selected {
+  border-color: #0a66c2;
+  box-shadow: 0 6px 18px rgba(10,102,194,0.12);
 }
 
 .product-card img {
@@ -230,6 +241,45 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.selected-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.selected-chip .chip-info {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.selected-chip .chip-brand {
+  color: #666;
+  font-size: 12px;
+}
+
+.remove-btn {
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-btn:hover {
+  background: #eee;
 }
 
 .generate-btn {
