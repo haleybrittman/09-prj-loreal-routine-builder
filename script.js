@@ -13,6 +13,27 @@ const messages = [
   { role: "system", content: systemMessage }
 ];
 
+/* Helper: fetch with timeout using AbortController */
+async function fetchWithTimeout(resource, options = {}, timeout = 15000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const resp = await fetch(resource, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return resp;
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
+}
+
+function showApiError(err, userMessage) {
+  console.error("API error:", err);
+  const message = userMessage || "Sorry — something went wrong while contacting the service. Please try again later.";
+  messages.push({ role: "assistant", content: message });
+  renderConversation();
+}
+
 /* Render the conversation (skip the system message for display) */
 function renderConversation() {
   // show newest messages last
@@ -235,11 +256,11 @@ chatForm.addEventListener("submit", async (e) => {
   };
 
   try {
-    const res = await fetch(workerURL, {
+    const res = await fetchWithTimeout(workerURL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
-    });
+    }, 15000);
 
     if (!res.ok) {
       let errText = `${res.status} ${res.statusText}`;
@@ -266,9 +287,8 @@ chatForm.addEventListener("submit", async (e) => {
     messages.push({ role: "assistant", content: reply });
     renderConversation();
   } catch (err) {
-    console.error("Error sending to worker:", err);
-    messages.push({ role: "assistant", content: `Sorry — something went wrong: ${err.message || err}` });
-    renderConversation();
+    // Use centralized error handler to log and show a friendly assistant message
+    showApiError(err, "Sorry — something went wrong while contacting the service. Please try again later.");
   }
 });
 
@@ -317,11 +337,11 @@ if (generateBtn) {
     };
 
     try {
-      const res = await fetch(workerURL, {
+      const res = await fetchWithTimeout(workerURL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      });
+      }, 15000);
 
       if (!res.ok) {
         let errText = `${res.status} ${res.statusText}`;
@@ -346,9 +366,8 @@ if (generateBtn) {
       messages.push({ role: "assistant", content: routine });
       renderConversation();
     } catch (err) {
-      console.error("Error generating routine:", err);
-      messages.push({ role: "assistant", content: `Sorry — couldn't generate the routine: ${err.message || err}` });
-      renderConversation();
+      // Centralized error handling so user sees a consistent assistant-style message
+      showApiError(err, "Sorry — couldn't generate the routine right now. Please try again later.");
     }
   });
 }
