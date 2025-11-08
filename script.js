@@ -23,11 +23,17 @@ function displayProducts(products) {
   productsContainer.innerHTML = products
     .map(
       (product) => `
-    <div class="product-card">
+    <div class="product-card" data-id="${product.id}">
       <img src="${product.image}" alt="${product.name}">
       <div class="product-info">
-        <h3>${product.name}</h3>
-        <p>${product.brand}</p>
+        <div class="info-row">
+          <div>
+            <h3>${product.name}</h3>
+            <p>${product.brand}</p>
+          </div>
+          <button class="info-btn" aria-expanded="false" aria-controls="desc-${product.id}" title="Show description">ℹ️</button>
+        </div>
+        <div class="product-desc" id="desc-${product.id}" hidden>${product.description}</div>
       </div>
     </div>
   `
@@ -106,25 +112,36 @@ categoryFilter.addEventListener("change", async (e) => {
   /* Display the filtered products and attach click handlers that toggle selection */
   displayProducts(filteredProducts);
 
-  /* After products are rendered, add dataset ids and click handlers */
+  /* After products are rendered, add click handlers for selection and info toggle */
   const cards = productsContainer.querySelectorAll(".product-card");
   cards.forEach((card) => {
-    // find product by index/unique image alt/title matching
-    // we rely on the ordered products passed to displayProducts; find by name
-    const nameEl = card.querySelector("h3");
-    const name = nameEl ? nameEl.textContent.trim() : null;
-    const product = filteredProducts.find((p) => p.name === name);
+    const id = Number(card.dataset.id);
+    const product = filteredProducts.find((p) => Number(p.id) === id);
     if (!product) return;
 
-    // attach data-id attribute for easy lookup
-    card.dataset.id = product.id;
-
     // restore selected visual if already chosen earlier
-    if (selectedProducts.has(Number(product.id))) {
-      card.classList.add("selected");
-    }
+    if (selectedProducts.has(id)) card.classList.add("selected");
 
+    // clicking the card toggles selection
     card.addEventListener("click", () => toggleProductSelection(product, card));
+
+    // info button toggles the description panel and should NOT toggle selection
+    const infoBtn = card.querySelector(".info-btn");
+    const desc = card.querySelector(`#desc-${id}`);
+    if (infoBtn && desc) {
+      infoBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const expanded = infoBtn.getAttribute("aria-expanded") === "true";
+        infoBtn.setAttribute("aria-expanded", String(!expanded));
+        if (expanded) {
+          desc.hidden = true;
+          card.classList.remove("desc-open");
+        } else {
+          desc.hidden = false;
+          card.classList.add("desc-open");
+        }
+      });
+    }
   });
 });
 
