@@ -4,6 +4,34 @@ const productsContainer = document.getElementById("productsContainer");
 const chatForm = document.getElementById("chatForm");
 const chatWindow = document.getElementById("chatWindow");
 
+const workerURL = "https://gca-worker.hbrittman.workers.dev/"; 
+
+const systemMessage = "You are an expert on L'Oréal products. Provide concise, helpful recommendations about products, routines, and usage tips. Ask clarifying questions when needed, and politely refuse requests that are unrelated to L'Oréal products or beauty routines.";
+
+/* Conversation messages start with a system message and then grow with user/assistant turns */
+const messages = [
+  { role: "system", content: systemMessage }
+];
+
+/* Render the conversation (skip the system message for display) */
+function renderConversation() {
+  // show newest messages last
+  const visible = messages.filter((m) => m.role !== "system");
+  chatWindow.innerHTML = visible
+    .map((m) => {
+      const who = m.role === "user" ? "You" : "Assistant";
+      // basic escaping
+      const content = String(m.content).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return `<div class="chat-line chat-${m.role}"><strong>${who}:</strong> <span>${content}</span></div>`;
+    })
+    .join("");
+  // scroll to bottom
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+// Set initial message
+chatWindow.textContent = "👋 Hello! How can I help you today?";
+
 /* Show initial placeholder until user selects a category */
 productsContainer.innerHTML = `
   <div class="placeholder-message">
@@ -44,6 +72,35 @@ function displayProducts(products) {
 /* Keep track of selected products in a Map keyed by product id */
 const selectedProducts = new Map();
 
+/* Persist selected products to localStorage so selections survive reloads */
+function saveSelectedProducts() {
+  try {
+    const arr = Array.from(selectedProducts.values());
+    localStorage.setItem("selectedProducts", JSON.stringify(arr));
+  } catch (e) {
+    console.warn("Could not save selected products:", e);
+  }
+}
+
+function loadSelectedProducts() {
+  try {
+    const raw = localStorage.getItem("selectedProducts");
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return;
+    arr.forEach((p) => {
+      if (p && p.id != null) selectedProducts.set(Number(p.id), p);
+    });
+  } catch (e) {
+    console.warn("Could not load selected products:", e);
+  }
+}
+
+// Restore any saved selections at startup
+loadSelectedProducts();
+// Render any restored selections in the Selected Products list
+updateSelectedProductsList();
+
 /* Toggle selection for a product and update UI */
 function toggleProductSelection(product, cardEl) {
   const id = Number(product.id);
@@ -57,6 +114,8 @@ function toggleProductSelection(product, cardEl) {
   }
 
   updateSelectedProductsList();
+  console.log(`toggleProductSelection: id=${id}, selectedCount=${selectedProducts.size}`);
+  saveSelectedProducts();
 }
 
 /* Render the selected products list with remove buttons */
@@ -145,9 +204,144 @@ categoryFilter.addEventListener("change", async (e) => {
   });
 });
 
-/* Chat form submission handler - placeholder for OpenAI integration */
-chatForm.addEventListener("submit", (e) => {
+/* Chat form submission handler - sends a POST to the Cloudflare Worker and shows result */
+chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  chatWindow.innerHTML = "Connect to the OpenAI API for a response!";
+  const inputEl = document.getElementById("userInput");
+  const userText = inputEl ? inputEl.value.trim() : "";
+  if (!userText) return;
+
+  // Immediately add the user message to conversation and clear the input
+  messages.push({ role: "user", content: userText });
+  renderConversation();
+  if (inputEl) inputEl.value = "";
+
+  // Show a working state
+  chatWindow.insertAdjacentHTML("beforeend", `<div class=\"chat-line chat-system\"><em>Thinking...</em></div>`);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  // Build payload with full conversation history and current selected products
+  const payload = {
+    messages: messages,
+    selectedProducts: Array.from(selectedProducts.values()).map((p) => ({ id: p.id, name: p.name, brand: p.brand }))
+  };
+
+  try {
+    const res = await fetch(workerURL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      let errText = `${res.status} ${res.statusText}`;
+      try {
+        const errJson = await res.json();
+        errText = errJson.error || errJson.message || JSON.stringify(errJson);
+      } catch (jsonErr) {
+        const txt = await res.text();
+        if (txt) errText = txt;
+      }
+      throw new Error(`Worker request failed: ${errText}`);
+    }
+
+    const data = await res.json();
+    let reply = null;
+    if (data.reply) reply = data.reply;
+    else if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) reply = data.choices[0].message.content;
+    else if (data.answer) reply = data.answer;
+    else if (typeof data === "string") reply = data;
+    else reply = JSON.stringify(data);
+
+    // Remove the temporary 'Thinking...' line we added and append assistant reply
+    // Simplest approach: re-render entire conversation including assistant reply
+    messages.push({ role: "assistant", content: reply });
+    renderConversation();
+  } catch (err) {
+    console.error("Error sending to worker:", err);
+    messages.push({ role: "assistant", content: `Sorry — something went wrong: ${err.message || err}` });
+    renderConversation();
+  }
 });
+
+/* Generate Routine button handler: send selected products to worker/OpenAI and display routine */
+const generateBtn = document.getElementById("generateRoutine");
+if (generateBtn) {
+  generateBtn.addEventListener("click", async () => {
+    if (selectedProducts.size === 0) {
+      chatWindow.textContent = "Please select one or more products first.";
+      return;
+    }
+
+    // Prepare selected products full data
+    const productsForApi = Array.from(selectedProducts.values()).map((p) => ({
+      id: p.id,
+      name: p.name,
+      brand: p.brand,
+      category: p.category,
+      description: p.description
+    }));
+
+    // Build the instruction and include a clear, machine-readable list of the selected products
+    const userPrompt = `Generate a clear, step-by-step personalized routine using only the selected products. For each product, indicate when to use it (morning/evening/as needed), the order in the routine, and a short usage tip. If a product is not relevant to face skincare (e.g., haircare or fragrance), include a short note about its recommended use. Keep instructions concise and actionable.`;
+
+    // Build a human-readable list of selected products to include in the message body so the worker/model definitely sees them
+    const productsText = productsForApi
+      .map((p, i) => `${i + 1}. ${p.name} — ${p.brand} (category: ${p.category})\n   ${p.description || ""}`)
+      .join("\n\n");
+
+    const combinedUserMessage = `${userPrompt}\n\nSelected products:\n${productsText}`;
+
+    // push the combined message (prompt + explicit product list) into conversation so the worker receives it in messages
+    messages.push({ role: "user", content: combinedUserMessage });
+    renderConversation();
+
+    // debug: log selected products and product payload
+    console.log("Generate Routine clicked. selectedProducts size:", selectedProducts.size);
+    console.log("selectedProducts map:", Array.from(selectedProducts.values()));
+
+    chatWindow.insertAdjacentHTML("beforeend", `<div class=\"chat-line chat-system\"><em>Generating personalized routine... (${selectedProducts.size} products selected)</em></div>`);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    const payload = {
+      messages: messages,
+      selectedProducts: productsForApi
+    };
+
+    try {
+      const res = await fetch(workerURL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        let errText = `${res.status} ${res.statusText}`;
+        try {
+          const errJson = await res.json();
+          errText = errJson.error || errJson.message || JSON.stringify(errJson);
+        } catch (jsonErr) {
+          const txt = await res.text();
+          if (txt) errText = txt;
+        }
+        throw new Error(`Worker request failed: ${errText}`);
+      }
+
+      const data = await res.json();
+      let routine = null;
+      if (data.reply) routine = data.reply;
+      else if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) routine = data.choices[0].message.content;
+      else if (data.answer) routine = data.answer;
+      else if (typeof data === "string") routine = data;
+      else routine = JSON.stringify(data);
+
+      messages.push({ role: "assistant", content: routine });
+      renderConversation();
+    } catch (err) {
+      console.error("Error generating routine:", err);
+      messages.push({ role: "assistant", content: `Sorry — couldn't generate the routine: ${err.message || err}` });
+      renderConversation();
+    }
+  });
+}
