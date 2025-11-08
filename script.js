@@ -67,9 +67,14 @@ productsContainer.innerHTML = `
 
 /* Load product data from JSON file */
 async function loadProducts() {
+  // Simple in-memory cache to avoid refetching on every keystroke
+  if (window.__productsCache && Array.isArray(window.__productsCache) && window.__productsCache.length) {
+    return window.__productsCache;
+  }
   const response = await fetch("products.json");
   const data = await response.json();
-  return data.products;
+  window.__productsCache = data.products || [];
+  return window.__productsCache;
 }
 
 /* Create HTML for displaying product cards */
@@ -126,6 +131,101 @@ function loadSelectedProducts() {
 loadSelectedProducts();
 // Render any restored selections in the Selected Products list
 updateSelectedProductsList();
+
+/* Small debounce helper to reduce filtering frequency while typing */
+function debounce(fn, wait = 200) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), wait);
+  };
+}
+
+/* Matches a product against a search term across common fields */
+function matchesSearch(product, term) {
+  if (!term) return true;
+  const t = term.toLowerCase();
+  if ((product.name || "").toLowerCase().includes(t)) return true;
+  if ((product.brand || "").toLowerCase().includes(t)) return true;
+  if ((product.description || "").toLowerCase().includes(t)) return true;
+  // support a 'keywords' field if the product provides it (string or array)
+  if (product.keywords) {
+    if (Array.isArray(product.keywords)) {
+      if (product.keywords.join(" ").toLowerCase().includes(t)) return true;
+    } else if (String(product.keywords).toLowerCase().includes(t)) return true;
+  }
+  return false;
+}
+
+/* Attach event listeners to the rendered product cards (selection + info toggle) */
+function attachCardListeners(renderedProducts) {
+  const cards = productsContainer.querySelectorAll(".product-card");
+  cards.forEach((card) => {
+    const id = Number(card.dataset.id);
+    const product = renderedProducts.find((p) => Number(p.id) === id);
+    if (!product) return;
+
+    // restore selected visual if already chosen earlier
+    if (selectedProducts.has(id)) card.classList.add("selected");
+
+    // clicking the card toggles selection
+    // remove any existing listeners by cloning the node to prevent dupes
+    const newCard = card.cloneNode(true);
+    card.parentNode.replaceChild(newCard, card);
+    newCard.addEventListener("click", () => toggleProductSelection(product, newCard));
+
+    // info button toggles the description panel and should NOT toggle selection
+    const infoBtn = newCard.querySelector(".info-btn");
+    const desc = newCard.querySelector(`#desc-${id}`);
+    if (infoBtn && desc) {
+      infoBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const expanded = infoBtn.getAttribute("aria-expanded") === "true";
+        infoBtn.setAttribute("aria-expanded", String(!expanded));
+        if (expanded) {
+          desc.hidden = true;
+          newCard.classList.remove("desc-open");
+        } else {
+          desc.hidden = false;
+          newCard.classList.add("desc-open");
+        }
+      });
+    }
+  });
+}
+
+/* Filter products by category and search term and render the results */
+async function filterAndDisplayProducts() {
+  const selectedCategory = categoryFilter ? categoryFilter.value : "";
+  const searchInput = document.getElementById("productSearch");
+  const searchTerm = searchInput ? searchInput.value.trim() : "";
+
+  const products = await loadProducts();
+
+  // start with all products, then narrow
+  let filtered = products.slice();
+
+  if (selectedCategory) {
+    filtered = filtered.filter((product) => String(product.category).toLowerCase() === String(selectedCategory).toLowerCase());
+  }
+
+  if (searchTerm) {
+    filtered = filtered.filter((p) => matchesSearch(p, searchTerm));
+  }
+
+  // If there are no filters and nothing selected, show a friendly placeholder
+  if (!selectedCategory && !searchTerm) {
+    productsContainer.innerHTML = `
+      <div class="placeholder-message">
+        Select a category or type to search products
+      </div>
+    `;
+    return;
+  }
+
+  displayProducts(filtered);
+  attachCardListeners(filtered);
+}
 
 /* Toggle selection for a product and update UI */
 function toggleProductSelection(product, cardEl) {
@@ -186,51 +286,18 @@ function updateSelectedProductsList() {
 }
 
 /* Filter and display products when category changes */
-categoryFilter.addEventListener("change", async (e) => {
-  const products = await loadProducts();
-  const selectedCategory = e.target.value;
-
-  /* filter() creates a new array containing only products 
-     where the category matches what the user selected */
-  const filteredProducts = products.filter(
-    (product) => product.category === selectedCategory
-  );
-
-  /* Display the filtered products and attach click handlers that toggle selection */
-  displayProducts(filteredProducts);
-
-  /* After products are rendered, add click handlers for selection and info toggle */
-  const cards = productsContainer.querySelectorAll(".product-card");
-  cards.forEach((card) => {
-    const id = Number(card.dataset.id);
-    const product = filteredProducts.find((p) => Number(p.id) === id);
-    if (!product) return;
-
-    // restore selected visual if already chosen earlier
-    if (selectedProducts.has(id)) card.classList.add("selected");
-
-    // clicking the card toggles selection
-    card.addEventListener("click", () => toggleProductSelection(product, card));
-
-    // info button toggles the description panel and should NOT toggle selection
-    const infoBtn = card.querySelector(".info-btn");
-    const desc = card.querySelector(`#desc-${id}`);
-    if (infoBtn && desc) {
-      infoBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const expanded = infoBtn.getAttribute("aria-expanded") === "true";
-        infoBtn.setAttribute("aria-expanded", String(!expanded));
-        if (expanded) {
-          desc.hidden = true;
-          card.classList.remove("desc-open");
-        } else {
-          desc.hidden = false;
-          card.classList.add("desc-open");
-        }
-      });
-    }
-  });
+categoryFilter.addEventListener("change", (e) => {
+  // Delegate actual filtering to the shared function
+  filterAndDisplayProducts();
 });
+
+// Wire up the new search input to filter as the user types (debounced)
+const searchInput = document.getElementById("productSearch");
+if (searchInput) {
+  searchInput.addEventListener("input", debounce(() => {
+    filterAndDisplayProducts();
+  }, 180));
+}
 
 /* Chat form submission handler - sends a POST to the Cloudflare Worker and shows result */
 chatForm.addEventListener("submit", async (e) => {

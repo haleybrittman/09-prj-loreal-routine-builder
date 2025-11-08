@@ -40,17 +40,34 @@ body {
 .search-section {
   margin: 30px 0;
   display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .search-section select {
-  width: 100%;
-  padding: 16px;
-  font-size: 18px;
+  /* allow select and search to share available space */
+  flex: 1 1 320px;
+  padding: 12px 14px;
+  font-size: 16px;
   border: 2px solid #000;
   border-radius: 8px;
   cursor: pointer;
   background-color: white;
   font-weight: 500;
+}
+
+.search-section input#productSearch {
+  flex: 1 1 260px;
+  padding: 12px 14px;
+  font-size: 16px;
+  border: 2px solid #000;
+  border-radius: 8px;
+  background: white;
+}
+
+.search-section input#productSearch:focus {
+  outline: none;
+  border-color: #666;
 }
 
 .search-section select:focus {
