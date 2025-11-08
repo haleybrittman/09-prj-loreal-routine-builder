@@ -153,6 +153,8 @@ function updateSelectedProductsList() {
       if (card) card.classList.remove("selected");
 
       updateSelectedProductsList();
+      // persist removal
+      saveSelectedProducts();
     });
   });
 }
@@ -342,6 +344,24 @@ if (generateBtn) {
       console.error("Error generating routine:", err);
       messages.push({ role: "assistant", content: `Sorry — couldn't generate the routine: ${err.message || err}` });
       renderConversation();
+    }
+  });
+}
+
+/* Clear all selections handler */
+const clearBtn = document.getElementById("clearSelections");
+if (clearBtn) {
+  clearBtn.addEventListener("click", () => {
+    selectedProducts.clear();
+    // remove selected visual state from any cards
+    productsContainer.querySelectorAll('.product-card.selected').forEach((c) => c.classList.remove('selected'));
+    updateSelectedProductsList();
+    // persist cleared state
+    try {
+      localStorage.removeItem('selectedProducts');
+    } catch (e) {
+      // fallback to saving empty array
+      saveSelectedProducts();
     }
   });
 }
