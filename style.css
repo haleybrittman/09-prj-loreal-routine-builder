@@ -91,6 +91,98 @@ body {
   max-width: 100%;
 }
 
+/* Chat bubble styles */
+.chat-line {
+  display: flex;
+  align-items: flex-start;
+}
+
+.chat-line.chat-assistant {
+  justify-content: flex-start;
+}
+
+.chat-line.chat-user {
+  justify-content: flex-end;
+}
+
+.chat-line .chat-text {
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  position: relative;
+}
+
+.chat-line.chat-assistant .chat-text {
+  background: #ffffff;
+  border: 1px solid #e6e6e6;
+  color: #222;
+  border-top-left-radius: 4px;
+  margin-left: 6px;
+}
+
+.chat-line.chat-user .chat-text {
+  background: #000000;
+  color: #fff;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-top-right-radius: 4px;
+  margin-right: 6px;
+}
+
+/* small 'tail' for assistant bubble */
+.chat-line.chat-assistant .chat-text::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 10px;
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-right: 8px solid #ffffff;
+  border-bottom: 8px solid transparent;
+}
+
+/* small 'tail' for user bubble */
+.chat-line.chat-user .chat-text::after {
+  content: "";
+  position: absolute;
+  right: -8px;
+  top: 10px;
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-left: 8px solid #000000;
+  border-bottom: 8px solid transparent;
+}
+
+/* Hide the explicit "You:" / "Assistant:" labels visually but keep them for screen readers */
+.chat-line strong {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Make the input look like a bubble too */
+.chat-form input {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 18px;
+  border: 1px solid #ddd;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.chat-form input:focus {
+  outline: none;
+  border-color: #000;
+}
+
 /* placeholder message */
 .placeholder-message {
   width: 100%;
