@@ -21,8 +21,13 @@ function renderConversation() {
     .map((m) => {
       const who = m.role === "user" ? "You" : "Assistant";
       // basic escaping
-      const content = String(m.content).replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      return `<div class="chat-line chat-${m.role}"><strong>${who}:</strong> <span>${content}</span></div>`;
+      // escape ampersand, less-than and greater-than to prevent HTML injection
+      const content = String(m.content)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      // put message text in an element that preserves whitespace and line breaks via CSS
+      return `<div class="chat-line chat-${m.role}"><strong>${who}:</strong> <span class="chat-text">${content}</span></div>`;
     })
     .join("");
   // scroll to bottom

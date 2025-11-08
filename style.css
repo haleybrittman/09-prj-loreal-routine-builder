@@ -81,6 +81,16 @@ body {
   margin-bottom: 20px;
 }
 
+.chat-line {
+  margin-bottom: 12px;
+}
+
+.chat-text {
+  white-space: pre-wrap; /* preserve newlines and spacing */
+  display: inline-block;
+  max-width: 100%;
+}
+
 /* placeholder message */
 .placeholder-message {
   width: 100%;
